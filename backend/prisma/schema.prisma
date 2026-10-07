@@ -1,0 +1,247 @@
+// schema.prisma — AI-verified e-waste reverse-logistics engine
+// Conventions: all money is stored in paise (Int), never floats.
+// Rekognition confidences are stored as returned (Float, 0–100).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Enums ─────────────────────────
+
+enum UserRole {
+  USER // household or student raising pickups
+  AGENT // collection agent scanning QR codes
+  ADMIN
+}
+
+enum WasteCategory {
+  MOBILE_PHONE
+  LAPTOP
+  TABLET
+  BATTERY
+  CHARGER_CABLE
+  SMALL_APPLIANCE
+  LARGE_APPLIANCE
+  PERIPHERAL
+  OTHER
+}
+
+enum ItemCondition {
+  WORKING
+  PARTIALLY_WORKING
+  DEAD
+  PHYSICALLY_DAMAGED
+}
+
+enum VerificationStatus {
+  PENDING // row created at presign time, image not yet analysed
+  VERIFIED // Rekognition confirmed electronics above threshold
+  REJECTED // not e-waste, or duplicate image
+  MANUAL_REVIEW // borderline confidence
+}
+
+enum PickupStatus {
+  AWAITING_VERIFICATION // image uploaded, Lambda has not reported back
+  VERIFIED // passed AI check, not yet in a cluster
+  REJECTED // failed AI check
+  POOLED // in an OPEN cluster, waiting for density threshold
+  SCHEDULED // cluster hit threshold, agent assigned
+  COLLECTED // QR scanned at doorstep, wallet credited
+  CANCELLED
+}
+
+enum ClusterType {
+  CAMPUS_HOSTEL
+  PIN_CODE
+}
+
+enum ClusterStatus {
+  OPEN // accepting requests, below threshold
+  READY // threshold reached, awaiting agent assignment
+  SCHEDULED // agent assigned, route visible
+  IN_PROGRESS // agent is collecting
+  COMPLETED
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionReason {
+  PICKUP_PAYOUT
+  WITHDRAWAL // simulated UPI cash-out
+  ADJUSTMENT
+}
+
+// ───────────────────────── Models ─────────────────────────
+
+model User {
+  id    String   @id @default(cuid())
+  name  String
+  email String   @unique
+  phone String?  @unique
+  role  UserRole @default(USER)
+
+  // Default pickup location; copied onto each PickupRequest at creation
+  addressLine String?
+  pinCode     String?
+  hostelCode  String? // e.g. "IITP-H4"; null for households
+  latitude    Float?
+  longitude   Float?
+
+  // Cached balance. Source of truth is the Transaction ledger;
+  // always update both inside one prisma.$transaction.
+  walletBalance Int @default(0)
+
+  wasteItems       WasteItem[]
+  pickupRequests   PickupRequest[]
+  transactions     Transaction[]
+  assignedClusters Cluster[]       @relation("AgentClusters")
+  collections      PickupRequest[] @relation("CollectedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@index([pinCode])
+}
+
+model WasteItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  category      WasteCategory
+  condition     ItemCondition
+  conditionForm Json? // raw answers from the condition form
+
+  // S3 — the key is how the Lambda finds this row from the ObjectCreated event
+  s3Bucket  String
+  s3Key     String  @unique
+  imageHash String? // S3 ETag; used to reject re-uploaded/duplicate photos
+
+  // Rekognition output
+  verificationStatus    VerificationStatus @default(PENDING)
+  isEwaste              Boolean?
+  rekognitionConfidence Float? // confidence of the best matching electronics label
+  topLabel              String? // e.g. "Mobile Phone"
+  rekognitionLabels     Json? // full [{ Name, Confidence, Parents }] for audit/demo
+  rejectionReason       String?
+  verifiedAt            DateTime?
+
+  estimatedValue Int? // paise, computed by the Lambda from category + condition
+
+  pickupRequest PickupRequest?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([verificationStatus])
+  @@index([imageHash])
+}
+
+model PickupRequest {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  wasteItemId String    @unique
+  wasteItem   WasteItem @relation(fields: [wasteItemId], references: [id])
+
+  status PickupStatus @default(AWAITING_VERIFICATION)
+
+  // Location snapshot (does not change if the user later edits their profile)
+  addressLine String
+  pinCode     String
+  hostelCode  String?
+  latitude    Float
+  longitude   Float
+
+  // Pooling
+  clusterId    String?
+  cluster      Cluster? @relation(fields: [clusterId], references: [id])
+  routeOrder   Int? // stop sequence within the cluster route
+  scheduledFor DateTime?
+
+  // Doorstep handover: the QR encodes qrToken (never the request id)
+  qrToken       String    @unique @default(uuid())
+  qrExpiresAt   DateTime?
+  collectedAt   DateTime?
+  collectedById String?
+  collectedBy   User?     @relation("CollectedBy", fields: [collectedById], references: [id])
+
+  payoutAmount Int? // paise, locked in at collection time
+  transaction  Transaction?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([clusterId, routeOrder])
+  @@index([pinCode, status])
+  @@index([hostelCode, status])
+}
+
+// One Cluster = one pooled pickup run for a zone. When it completes,
+// the next verified request in that zone opens a fresh OPEN cluster.
+model Cluster {
+  id   String      @id @default(cuid())
+  type ClusterType
+  // Zone identifier: the pin code or the hostel code, depending on type
+  zoneKey String
+  label   String? // display name, e.g. "Hostel 4, IIT Patna"
+
+  status           ClusterStatus @default(OPEN)
+  densityThreshold Int           @default(5) // requests needed before scheduling
+  requestCount     Int           @default(0) // denormalised for cheap threshold checks
+  totalValue       Int           @default(0) // paise, sum of estimated values
+
+  // Centroid for the Leaflet map
+  centerLat Float?
+  centerLng Float?
+
+  agentId      String?
+  agent        User?     @relation("AgentClusters", fields: [agentId], references: [id])
+  scheduledFor DateTime?
+  completedAt  DateTime?
+
+  pickupRequests PickupRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, zoneKey, status])
+  @@index([agentId, status])
+}
+
+// Append-only wallet ledger. Never update or delete rows.
+model Transaction {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  type         TransactionType
+  reason       TransactionReason
+  amount       Int // paise, always positive; direction comes from `type`
+  balanceAfter Int // paise, wallet balance after this entry
+
+  // @unique makes the payout idempotent: a second scan of the same QR
+  // cannot create a second credit.
+  pickupRequestId String?        @unique
+  pickupRequest   PickupRequest? @relation(fields: [pickupRequestId], references: [id])
+
+  upiReference String? // simulated UPI reference
+  note         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
