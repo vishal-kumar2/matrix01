@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import apiClient from '../api/client';
+import apiClient from '../Api/client';
 
 export default function UploadItem() {
   const [formData, setFormData] = useState({
