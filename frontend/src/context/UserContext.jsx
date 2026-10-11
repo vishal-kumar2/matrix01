@@ -3,7 +3,7 @@ import { createContext, useState, useContext } from 'react';
 const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
-  const [user, setUser] = useState({ id: 'usr_1', name: 'Household Member A', role: 'USER' }); // Default logged-in user for testing
+  const [user, setUser] = useState(null); // Default logged-in user for testing
 
   const login = (selectedUser) => setUser(selectedUser);
   const logout = () => setUser(null);
