@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  AGENT
+}
+enum ItemStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+enum PickupStatus {
+  AWAITING_VERIFICATION
+  REJECTED
+  POOLED
+  SCHEDULED
+  COLLECTED
+}
+enum ClusterStatus {
+  OPEN
+  SCHEDULED
+  COMPLETED
+}
+enum ZoneType {
+  CAMPUS_HOSTEL
+  PIN_CODE
+}
+enum TxnType {
+  CREDIT
+  DEBIT
+}
+enum TxnReason {
+  PICKUP_PAYOUT
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String
+  role          Role            @default(USER)
+  hostelCode    String?
+  pinCode       String
+  address       String
+  lat           Float
+  lng           Float
+  walletBalance Int             @default(0) // paise
+  createdAt     DateTime        @default(now())
+  items         WasteItem[]
+  pickups       PickupRequest[]
+  transactions  Transaction[]
+  clusters      Cluster[]       @relation("AgentClusters")
+}
+
+model WasteItem {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id])
+  category        String
+  condition       String
+  conditionForm   Json
+  s3Key           String         @unique
+  contentType     String
+  status          ItemStatus     @default(PENDING)
+  imageHash       String?
+  detectedLabel   String?
+  confidence      Float?
+  estimatedValue  Int?           // paise
+  rejectionReason String?
+  createdAt       DateTime       @default(now())
+  pickup          PickupRequest?
+
+  @@index([imageHash])
+}
+
+model PickupRequest {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  itemId       String       @unique
+  item         WasteItem    @relation(fields: [itemId], references: [id])
+  status       PickupStatus @default(AWAITING_VERIFICATION)
+  address      String
+  lat          Float
+  lng          Float
+  hostelCode   String?
+  pinCode      String
+  clusterId    String?
+  cluster      Cluster?     @relation(fields: [clusterId], references: [id])
+  qrToken      String?      @unique
+  qrExpiresAt  DateTime?
+  routeOrder   Int?
+  payoutAmount Int?         // paise
+  collectedAt  DateTime?
+  createdAt    DateTime     @default(now())
+
+  @@index([userId])
+  @@index([clusterId])
+}
+
+model Cluster {
+  id               String          @id @default(cuid())
+  zoneType         ZoneType
+  zoneKey          String
+  status           ClusterStatus   @default(OPEN)
+  requestCount     Int             @default(0)
+  totalValue       Int             @default(0) // paise
+  densityThreshold Int             @default(5)
+  centroidLat      Float           @default(0)
+  centroidLng      Float           @default(0)
+  agentId          String?
+  agent            User?           @relation("AgentClusters", fields: [agentId], references: [id])
+  scheduledFor     DateTime?
+  createdAt        DateTime        @default(now())
+  requests         PickupRequest[]
+
+  @@index([zoneType, zoneKey, status])
+  @@index([agentId])
+}
+
+model Transaction {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  type         TxnType
+  reason       TxnReason
+  amount       Int       // paise
+  balanceAfter Int       // paise
+  reference    String
+  pickupId     String?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
