@@ -1,25 +1,31 @@
+// src/lib/api.js
 import axios from 'axios';
 
-const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000',
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+const api = axios.create({
+  baseURL: API_BASE,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// GET /users/:id/wallet -> Returns balance in paise
 export const getWallet = async (userId) => {
-  // Mock response
-  return {
-    balance: 45000, // 45000 paise = ₹450
-    transactions: []
-  };
+  try {
+    const res = await api.get(`/users/${userId}/wallet`);
+    return res.data;
+  } catch (err) {
+    console.error('Wallet API Error:', err);
+    return { balance: 0 }; // Return zero instead of mock balance
+  }
 };
 
-// GET /users/:id/pickups -> Returns list for the home screen
 export const getUserPickups = async (userId) => {
-  // Mock response
-  return [
-    { id: 'pickup_123', category: 'LAPTOP', status: 'POOLED', estimatedValue: 35000, createdAt: new Date().toISOString() },
-    { id: 'pickup_456', category: 'MOBILE_PHONE', status: 'AWAITING_VERIFICATION', estimatedValue: null, createdAt: new Date().toISOString() }
-  ];
+  try {
+    const res = await api.get(`/pickups?userId=${userId}`);
+    return res.data;
+  } catch (err) {
+    console.error('Pickups API Error:', err);
+    return []; // Return empty list instead of mock pickups
+  }
 };
-
-export default apiClient;
