@@ -15,8 +15,8 @@ export default function VerificationResult({ item }) {
     <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-800 text-sm">
       <p className="font-bold text-green-900">✅ AI Verification Passed</p>
       <div className="mt-2 space-y-1 text-xs">
-        <p><span className="font-semibold">Detected Label:</span> {item.topLabel || item.category}</p>
-        {item.confidence && (
+        <p><span className="font-semibold">Detected Label:</span> {item.label || item.category}</p>
+        {item.confidence > 0 && (
           <p><span className="font-semibold">Confidence:</span> {item.confidence.toFixed(1)}%</p>
         )}
         <p><span className="font-semibold">Est. Payout:</span> ₹{(item.estimatedValue / 100).toFixed(2)}</p>

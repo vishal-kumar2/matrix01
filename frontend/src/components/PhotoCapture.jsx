@@ -13,7 +13,8 @@ export default function PhotoCapture({ onPhotoSelect, preview, setPreview }) {
       setCompressing(true);
 
       // Compress photo under 1MB to keep demo fast
-      const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1200, useWebWorker: true };
+      // Always output JPEG: Rekognition rejects HEIC/WebP and the backend only signs JPEG/PNG.
+      const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/jpeg' };
       const compressedFile = await imageCompression(file, options);
 
       setPreview(URL.createObjectURL(compressedFile));

@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import NewRequest from './pages/NewRequest';
 import PickupStatus from './pages/PickupStatus';
 import Wallet from './pages/Wallet';
+import AgentDashboard from './pages/AgentDashboard';
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
                 <Route path="/new" element={<NewRequest />} />
                 <Route path="/pickups/:id" element={<PickupStatus />} />
                 <Route path="/wallet" element={<Wallet />} />
+                <Route path="/agent" element={<AgentDashboard />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>

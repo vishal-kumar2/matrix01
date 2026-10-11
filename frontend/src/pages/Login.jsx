@@ -1,51 +1,68 @@
-// src/pages/Login.jsx
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
+import { getUsers, errorMessage } from '../lib/api';
 
 export default function Login() {
   const { login } = useUser();
   const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleDemoLogin = () => {
-    // Hackathon demo mock user
-    login({ 
-      id: 'usr_123', 
-      name: 'Vishal Kumar', 
-      role: 'USER' 
-    });
-    navigate('/');
+  useEffect(() => {
+    getUsers()
+      .then(setUsers)
+      .catch((err) => setError(errorMessage(err)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const choose = (u) => {
+    login(u);
+    navigate(u.role === 'AGENT' ? '/agent' : '/', { replace: true });
   };
 
+  const agents = users.filter((u) => u.role === 'AGENT');
+  const people = users.filter((u) => u.role !== 'AGENT');
+
+  const UserButton = ({ u }) => (
+    <button
+      type="button"
+      onClick={() => choose(u)}
+      className="w-full text-left p-4 bg-white border border-teal-100 rounded-2xl shadow-sm hover:border-teal-400 hover:shadow-md transition-all"
+    >
+      <p className="font-bold text-teal-900">{u.name}</p>
+      <p className="text-xs text-teal-600">{u.address || u.pinCode}</p>
+    </button>
+  );
+
   return (
-    <div className="min-h-full flex flex-col items-center justify-center p-6 text-center">
-      {/* App Logo/Icon */}
-      <div className="w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-3xl shadow-[0_10px_30px_rgba(20,184,166,0.4)] flex items-center justify-center mb-8 transform hover:rotate-12 transition-all duration-300">
-        <span className="text-5xl drop-shadow-md">🏖️</span>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-extrabold text-teal-900">Choose a demo account</h1>
+        <p className="text-sm text-teal-600 mt-1">Login is simulated for the hackathon.</p>
       </div>
 
-      <h1 className="text-4xl font-black text-teal-950 mb-2 tracking-tight">EcoScrap</h1>
-      <p className="text-teal-700 font-medium mb-12">Turn e-waste into clean water.</p>
+      {loading && <p className="text-teal-600 animate-pulse">Loading accounts...</p>}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          Could not reach the backend: {error}
+        </div>
+      )}
 
-      {/* Demo Login Button */}
-      <div className="w-full max-w-sm space-y-4">
-        <button
-          onClick={handleDemoLogin}
-          className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-4 rounded-2xl font-black text-lg shadow-[0_8px_20px_rgba(20,184,166,0.3)] hover:shadow-[0_12px_25px_rgba(20,184,166,0.5)] hover:-translate-y-1 transition-all"
-        >
-          <span>👤</span> Login as Household User
-        </button>
+      {people.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xs font-black uppercase tracking-wider text-teal-700">Students and households</h2>
+          {people.map((u) => <UserButton key={u.id} u={u} />)}
+        </div>
+      )}
 
-        <button
-          onClick={() => alert("Agent flow coming soon!")}
-          className="w-full flex items-center justify-center gap-3 bg-white text-teal-700 border-2 border-teal-100 py-4 rounded-2xl font-black text-lg shadow-sm hover:bg-teal-50 hover:border-teal-300 transition-all"
-        >
-          <span>🚚</span> Login as Collection Agent
-        </button>
-      </div>
-
-      <p className="mt-8 text-xs text-teal-500 font-semibold uppercase tracking-wider">
-        Hackathon Demo Mode
-      </p>
+      {agents.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xs font-black uppercase tracking-wider text-teal-700">Collection agent</h2>
+          {agents.map((u) => <UserButton key={u.id} u={u} />)}
+        </div>
+      )}
     </div>
   );
 }

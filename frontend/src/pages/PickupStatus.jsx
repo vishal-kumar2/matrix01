@@ -6,6 +6,7 @@ import StatusTimeline from '../components/StatusTimeline';
 import VerificationResult from '../components/VerificationResult';
 import ClusterProgress from '../components/ClusterProgress';
 import PickupQR from '../components/PickupQR';
+import { API_BASE } from '../lib/api';
 
 export default function PickupStatus() {
   const { id } = useParams();
@@ -19,27 +20,11 @@ export default function PickupStatus() {
 
     const fetchStatus = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-        const res = await axios.get(`${apiBase}/pickups/${id}`);
+        const res = await axios.get(`${API_BASE}/pickups/${id}`);
         setPickup(res.data);
       } catch (err) {
-        // Fallback mock data for testing UI before backend endpoint is connected
-        setPickup({
-          id,
-          status: 'POOLED',
-          item: {
-            topLabel: 'Mobile Phone',
-            confidence: 94.2,
-            estimatedValue: 35000, // 35000 paise = ₹350
-            rejectionReason: null,
-          },
-          cluster: {
-            requestCount: 3,
-            densityThreshold: 5,
-            scheduledFor: null,
-          },
-          qrToken: 'qr_mock_123456789',
-        });
+        console.error('Could not load pickup', err);
+        setPickup(null);
       } finally {
         setLoading(false);
       }
@@ -86,6 +71,12 @@ export default function PickupStatus() {
       ) : (
         <>
           {/* 3. VERIFIED or POOLED State[cite: 2] */}
+          {pickup.status === 'AWAITING_VERIFICATION' && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm font-semibold text-center animate-pulse">
+              🔎 AI is checking your photo...
+            </div>
+          )}
+
           {(pickup.status === 'VERIFIED' || pickup.status === 'POOLED') && (
             <div className="space-y-4">
               <VerificationResult item={pickup.item} />

@@ -1,21 +1,17 @@
 // src/pages/Home.jsx
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import { getWallet, getUserPickups } from '../lib/api';
 
 export default function Home() {
   const { user, logout } = useUser();
-  const navigate = useNavigate();
-
   const [balance, setBalance] = useState(0);
   const [pickups, setPickups] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Redirect to login if user session is null
-  if (!user) return <Navigate to="/login" replace />;
-
   useEffect(() => {
+    if (!user) return;
     const fetchHomeData = async () => {
       try {
         const walletData = await getWallet(user.id);
@@ -23,32 +19,27 @@ export default function Home() {
         setBalance(walletData.balance);
         setPickups(pickupsData);
       } catch (error) {
-        console.error('Failed to load home data', error);
+        console.error(error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchHomeData();
-  }, [user.id]);
+  }, [user]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === 'AGENT') return <Navigate to="/agent" replace />;
 
-  if (loading) {
-    return (
-      <div className="p-4 text-center mt-20 animate-pulse text-teal-600 font-bold">
-        🌊 Riding the waves to your dashboard...
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="p-4 text-center mt-20 animate-pulse text-teal-600 font-bold">
+      🌊 Riding the waves to your dashboard...
+    </div>
+  );
 
-  // Gamification logic
-  const userXP = pickups.length * 150;
+  // Gamification logic mock
+  const userXP = pickups.length * 150; 
   const userLevel = Math.floor(userXP / 500) + 1;
-  const progressToNext = ((userXP % 500) / 500) * 100;
+  const progressToNext = (userXP % 500) / 500 * 100;
 
   return (
     <div className="p-6 pb-24">
@@ -65,10 +56,7 @@ export default function Home() {
             <span className="text-xs font-bold text-teal-600">{userXP} XP</span>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-xs text-emerald-600 hover:text-emerald-800 font-bold bg-white/50 px-3 py-1.5 rounded-full shadow-sm transition-all hover:scale-105 cursor-pointer"
-        >
+        <button onClick={logout} className="text-xs text-emerald-600 hover:text-emerald-800 font-bold bg-white/50 px-3 py-1.5 rounded-full shadow-sm transition-all hover:scale-105">
           Logout
         </button>
       </div>
@@ -76,7 +64,7 @@ export default function Home() {
       {/* XP Progress Bar */}
       <div className="mb-6">
         <div className="w-full bg-teal-100/50 h-3 rounded-full overflow-hidden shadow-inner">
-          <div
+          <div 
             className="bg-gradient-to-r from-teal-400 to-emerald-400 h-full rounded-full transition-all duration-1000 ease-out relative"
             style={{ width: `${progressToNext}%` }}
           >
@@ -90,28 +78,26 @@ export default function Home() {
 
       {/* Wallet Card - Glassy Ocean Design */}
       <div className="relative bg-gradient-to-br from-emerald-500 to-teal-700 text-white rounded-[2rem] p-6 mb-8 shadow-[0_10px_30px_rgba(4,120,87,0.3)] overflow-hidden hover:scale-[1.02] transition-transform duration-300">
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-xl" />
-        <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-cyan-300/20 rounded-full blur-lg" />
-
+        {/* Decorative background circles */}
+        <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-xl"></div>
+        <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-cyan-300/20 rounded-full blur-lg"></div>
+        
         <p className="text-emerald-100 text-sm font-bold tracking-wide mb-1 opacity-90">EcoBalance</p>
         <h2 className="text-5xl font-black mb-1 drop-shadow-md">₹{(balance / 100).toFixed(2)}</h2>
-
-        <Link
-          to="/wallet"
-          className="inline-flex items-center gap-2 mt-4 text-xs font-bold bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-5 py-2.5 rounded-full transition-all"
-        >
+        
+        <Link to="/wallet" className="inline-flex items-center gap-2 mt-4 text-xs font-bold bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-5 py-2.5 rounded-full transition-all">
           View Ledger →
         </Link>
       </div>
 
-      {/* Primary Action Button */}
-      <Link
-        to="/new"
+      {/* Primary Action Button (Gamified & Bouncing) */}
+      <Link 
+        to="/new" 
         className="group relative flex items-center justify-center gap-3 w-full bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-4 rounded-2xl font-black text-lg mb-8 shadow-[0_8px_25px_rgba(20,184,166,0.4)] hover:shadow-[0_12px_35px_rgba(20,184,166,0.6)] hover:-translate-y-1 transition-all duration-300"
       >
         <span className="text-2xl group-hover:rotate-12 transition-transform duration-300">♻️</span>
         Recycle New Item
-        <div className="absolute inset-0 rounded-2xl border-2 border-white/20 group-hover:scale-105 transition-transform duration-300" />
+        <div className="absolute inset-0 rounded-2xl border-2 border-white/20 group-hover:scale-105 transition-transform duration-300"></div>
       </Link>
 
       {/* Pickups List */}
@@ -128,41 +114,27 @@ export default function Home() {
         ) : (
           <div className="space-y-3">
             {pickups.map((pickup) => (
-              <Link
-                to={`/pickups/${pickup.id}`}
+              <Link 
+                to={`/pickups/${pickup.id}`} 
                 key={pickup.id}
                 className="flex items-center justify-between p-4 bg-white/80 backdrop-blur-sm border border-teal-50 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-200 transition-all hover:-translate-y-0.5 group block"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-teal-50 rounded-full flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
-                    {pickup.category === 'MOBILE_PHONE'
-                      ? '📱'
-                      : pickup.category === 'LAPTOP'
-                      ? '💻'
-                      : '🔌'}
+                    {{ phone: '📱', laptop: '💻', tablet: '📲', battery: '🔋', charger: '🔌' }[pickup.category] || '♻️'}
                   </div>
                   <div>
-                    <p className="font-bold text-gray-800 capitalize">
-                      {pickup.category.replace('_', ' ').toLowerCase()}
-                    </p>
-                    <p className="text-xs text-teal-600 font-medium">
-                      {new Date(pickup.createdAt).toLocaleDateString()}
-                    </p>
+                    <p className="font-bold text-gray-800 capitalize">{pickup.item?.label || pickup.category}</p>
+                    <p className="text-xs text-teal-600 font-medium">{new Date(pickup.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   {pickup.estimatedValue && (
-                    <p className="font-black text-emerald-600 mb-1">
-                      ₹{pickup.estimatedValue / 100}
-                    </p>
+                    <p className="font-black text-emerald-600 mb-1">₹{pickup.estimatedValue / 100}</p>
                   )}
-                  <span
-                    className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                      pickup.status === 'COLLECTED'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-cyan-100 text-cyan-700'
-                    }`}
-                  >
+                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                    pickup.status === 'COLLECTED' ? 'bg-emerald-100 text-emerald-700' : 'bg-cyan-100 text-cyan-700'
+                  }`}>
                     {pickup.status}
                   </span>
                 </div>

@@ -1,8 +1,9 @@
 // src/pages/Wallet.jsx
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import axios from 'axios';
+import { API_BASE } from '../lib/api';
 
 export default function Wallet() {
   const { user } = useUser();
@@ -15,31 +16,11 @@ export default function Wallet() {
   useEffect(() => {
     const fetchWallet = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-        const res = await axios.get(`${apiBase}/users/${user.id}/wallet`);
+        const res = await axios.get(`${API_BASE}/users/${user.id}/wallet`);
         setBalance(res.data.balance);
         setTransactions(res.data.transactions || []);
       } catch (err) {
-        // Mock fallback for testing UI before endpoint connection
-        setBalance(45000); // 45000 paise = ₹450
-        setTransactions([
-          {
-            id: 'tx_1',
-            type: 'CREDIT',
-            reason: 'PICKUP_PAYOUT',
-            amount: 35000,
-            createdAt: new Date().toISOString(),
-            note: 'Mobile Phone collection credit',
-          },
-          {
-            id: 'tx_2',
-            type: 'CREDIT',
-            reason: 'PICKUP_PAYOUT',
-            amount: 10000,
-            createdAt: new Date(Date.now() - 86400000).toISOString(),
-            note: 'Old battery collection credit',
-          },
-        ]);
+        console.error('Could not load wallet', err);
       } finally {
         setLoading(false);
       }
@@ -48,6 +29,7 @@ export default function Wallet() {
     if (user?.id) fetchWallet();
   }, [user]);
 
+  if (!user) return <Navigate to="/login" replace />;
   if (loading) return <div className="p-4 text-center mt-10">Loading wallet...</div>;
 
   return (
@@ -95,7 +77,7 @@ export default function Wallet() {
                   <p className="font-bold text-sm text-gray-800">
                     {tx.reason === 'PICKUP_PAYOUT' ? '♻️ Pickup Reward' : tx.reason}
                   </p>
-                  <p className="text-xs text-gray-500 mt-0.5">{tx.note || 'Eco-friendly recycling'}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{tx.reference || 'Eco-friendly recycling'}</p>
                   <p className="text-[10px] text-gray-400 mt-1">
                     {new Date(tx.createdAt).toLocaleDateString()}
                   </p>

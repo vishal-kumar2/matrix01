@@ -1,11 +1,12 @@
 // src/pages/NewRequest.jsx
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useUser } from '../context/UserContext';
 import CategoryPicker from '../components/CategoryPicker';
 import ConditionForm from '../components/ConditionForm';
 import PhotoCapture from '../components/PhotoCapture';
+import { API_BASE, toBackendCategory, toBackendCondition, errorMessage } from '../lib/api';
 
 export default function NewRequest() {
   const { user } = useUser();
@@ -19,6 +20,8 @@ export default function NewRequest() {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
 
+  if (!user) return <Navigate to="/login" replace />;
+
   const handleSubmit = async () => {
     if (!photo) return alert('Please capture a photo of the item first.');
 
@@ -26,27 +29,28 @@ export default function NewRequest() {
       setUploading(true);
 
       // 1. Request presigned URL from backend[cite: 2]
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-      const postResponse = await axios.post(`${apiBase}/pickups`, {
+      // Photo is always converted to JPEG in PhotoCapture, so the type is fixed.
+      const contentType = 'image/jpeg';
+      const postResponse = await axios.post(`${API_BASE}/pickups`, {
         userId: user.id,
-        category,
-        condition,
+        category: toBackendCategory(category),
+        condition: toBackendCondition(condition),
         conditionForm,
-        contentType: photo.type || 'image/jpeg', // Must match Content-Type on S3 upload[cite: 2]
+        contentType,
       });
 
       const { pickupId, uploadUrl } = postResponse.data;
 
       // 2. Direct PUT to S3 bucket[cite: 2]
       await axios.put(uploadUrl, photo, {
-        headers: { 'Content-Type': photo.type || 'image/jpeg' },
+        headers: { 'Content-Type': contentType }, // must match what the URL was signed with
       });
 
       // 3. Navigate to Status page with real-time polling[cite: 2]
       navigate(`/pickups/${pickupId}`);
     } catch (err) {
       console.error('Submission failed', err);
-      alert('Upload failed. Please try again.');
+      alert(`Upload failed: ${errorMessage(err)}`);
     } finally {
       setUploading(false);
     }
